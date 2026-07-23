@@ -112,7 +112,8 @@ python ina/babymeal/scripts/sync_to_neon.py --fridge   # --growth / --meals
 - H-3: Stop hook 등록과 동일 명령의 변경 감지 실행은 검증했으나, 이 테스트 세션 안에서는 실제 Claude 세션 종료 이벤트를 관찰할 수 없어 부분 검증(⚠️)으로 남겼다.
 - M-4: 계획 범위의 경계 행을 삭제하면 min/max 자체가 이동하므로, 테스트 전제에 맞게 범위를 유지하는 내부 날짜(2026-07-24 오전)로 검증했다.
 - M-7: 운영 사이트 DOM에서 `chip-grain`, `chip-veggie`, `chip-protein`, `chip-test`와 `(테스트)` 표시를 확인했다.
-- R-2*: Aina가 실제로 사용하는 `D:\aina\.claude\skills\mealplan\SKILL.md`에는 `description`과 `ingredients_json` 동시 저장 규칙이 있어 통과했다. 다만 Codex용 `D:\aina\.agents\skills\mealplan\SKILL.md` 사본에는 `ingredients_json` 규칙이 빠져 있어 동기화 누락 위험이 있다.
+- R-2*: Aina가 실제로 사용하는 `D:\aina\.claude\skills\mealplan\SKILL.md`에는 `description`과 `ingredients_json` 동시 저장 규칙이 있어 통과했다. 다만 Codex용 `D:\aina\.agents\skills\mealplan\SKILL.md` 사본에는 `ingredients_json` 규칙이 빠져 있어 동기화 누락 위험이 있었다.
+  - **해결(2026-07-24)**: `.agents/skills/`의 mealplan·cube-ops 사본에 `.claude` 원본과 동일한 `ingredients_json` 규칙 반영. 두 사본 모두 원본과 diff 0(완전 일치) 확인. → Codex가 식단을 저장해도 구조화 데이터가 함께 기록되어 동기화 무손실 유지.
 
 ## 자동화 여지 (후속)
 - 위 케이스 중 F/G/M의 데이터 검증은 `pytest` + 임시 Neon 스키마(또는 트랜잭션 롤백)로 스크립트화 가능. 현재는 수동 체크리스트.
