@@ -125,3 +125,27 @@ gh api repos/jaywapp/baby-meal-planner/pages -X DELETE
 - 로컬: `D:\aina\.claude\launch.json`의 `babymeal-dev` 설정으로 dev 서버 실행 (autoPort 사용, 3000이 다른 프로세스에 점유돼 있음)
 - 캘린더 탭: /calendar에서 주간→일간→월간 클릭, 월간에서 날짜 클릭 시 일간으로 전환되는지
 - E2E: 식단 편집 저장 → 새로고침 후 유지 → 다른 기기/브라우저에서도 보이는지 (DB 저장 확인)
+
+## 8. 2026-07-24 진행 결과
+
+- Neon Marketplace 약관 동의 및 리소스 `neon-indigo-mountain` 프로비저닝 완료
+- `baby-meal-planner` 프로젝트에 Neon 연결 및 Development/Preview/Production 환경변수 구성 완료
+- `npm run init-db`로 스키마와 초기 데이터 시드 완료
+- Vercel 프로젝트 프레임워크를 Next.js로 설정하고 프로덕션 배포 완료
+  - 운영 URL: https://baby-meal-planner-psi.vercel.app
+- 프로덕션 브라우저 검증 완료
+  - 대시보드에서 오늘 식단·알러지·재고·성장 데이터 로드 확인
+  - 캘린더 주간/일간/월간 탭 및 월간 날짜 선택 → 일간 전환 확인
+  - 기존 식단을 내용 변경 없이 저장한 뒤 새로고침하여 Neon 재조회 확인
+  - 브라우저 콘솔 오류 없음, Vercel 최근 1시간 런타임 오류 없음
+- 캘린더 정적 렌더와 접속 시점 날짜 차이로 발생하던 React hydration 오류 수정
+  - 작업 브랜치: `fix/calendar-hydration`
+  - 아직 원격 push/PR은 하지 않음
+- 기존 GitHub Pages v1 비활성화 완료
+
+### 남은 작업
+
+- `fix/calendar-hydration` 브랜치를 push하고 PR로 병합
+- 선택: Vercel GitHub App을 설치해 Git 기반 자동 배포 연결
+- 장기 과제: Aina SQLite와 BabyMeal Neon 중 SSOT 결정 및 동기화 방침 수립
+- 필요 시 인증/접근 제한 추가
