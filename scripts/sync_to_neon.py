@@ -6,16 +6,16 @@ Reads Aina's SSOT (SQLite + hyerim-rules.md markdown) and pushes the current
 state into the BabyMeal Neon Postgres so the web app reflects what the user
 told the Aina bot.
 
-Scope (intentionally limited for now):
+Scope:
   - fridge_stock : full-state sync from the cube-inventory markdown table
                    (source is the SSOT; Neon is reconciled to match exactly).
   - growth       : upsert-by-date from child_records (몸무게/키). Never deletes.
-
-NOT synced yet:
-  - meal_plans   : Aina's SQLite meal_plans is stale/near-empty while Neon holds
-                   the real seeded schedule. Syncing (with delete) would wipe the
-                   web's meals. Deferred until D1(a) makes Aina the meal SSOT.
-                   See docs/SYNC-REQUIREMENTS.md.
+  - meal_plans   : from Aina meal_plans.ingredients_json (structured at author
+                   time). Range-scoped full-state: within the min..max date that
+                   Aina plans, Neon is reconciled to match (adds/edits/deletes
+                   propagate); dates outside that range are left untouched so a
+                   web-only meal far from Aina's schedule is never clobbered.
+                   Requires the one-shot migrate_meals_to_aina.py to have run.
 
 Design notes:
   - Idempotent: safe to run repeatedly; result depends only on current source state.
@@ -248,19 +248,99 @@ def sync_growth(cur, by_date, dry):
     return changed
 
 
+MEALTYPE_TO_SLOT = {"오전": "morning", "아침": "morning", "저녁": "evening"}
+
+
+def read_meal_rows(db_path):
+    """Read structured meals from Aina -> {(date, slot): (ingredients, note)}."""
+    con = sqlite3.connect(db_path)
+    try:
+        cols = [r[1] for r in con.execute("PRAGMA table_info(meal_plans)")]
+        if "ingredients_json" not in cols:
+            return None  # migration not run yet -> skip meals entirely
+        rows = con.execute(
+            "SELECT plan_date, meal_type, ingredients_json, description "
+            "FROM meal_plans ORDER BY plan_date, meal_type, id"
+        ).fetchall()
+    finally:
+        con.close()
+
+    meals = {}
+    for plan_date, meal_type, ingredients_json, description in rows:
+        slot = MEALTYPE_TO_SLOT.get(meal_type)
+        if not slot:
+            continue
+        if ingredients_json:
+            try:
+                ingredients = json.loads(ingredients_json)
+            except ValueError:
+                ingredients = [{"name": (description or "식단")[:40], "type": "etc"}]
+        else:
+            ingredients = [{"name": (description or "식단")[:40], "type": "etc"}]
+        meals[(str(plan_date)[:10], slot)] = (ingredients, description)
+    return meals
+
+
+def sync_meal(cur, meals, dry):
+    """Range-scoped full-state reconcile of Neon meal_plans from Aina."""
+    if meals is None:
+        log("meals: ingredients_json column absent (migration not run) — skipped")
+        return 0
+    if not meals:
+        log("meals: no source rows — skipped (Neon left untouched)")
+        return 0
+
+    dates = [d for (d, _s) in meals]
+    dmin, dmax = min(dates), max(dates)
+    changed = 0
+    for (date, slot), (ingredients, note) in sorted(meals.items()):
+        if dry:
+            changed += 1
+            continue
+        cur.execute(
+            """
+            INSERT INTO meal_plans (date, slot, ingredients, note)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (date, slot)
+            DO UPDATE SET ingredients = EXCLUDED.ingredients, note = EXCLUDED.note
+            """,
+            (date, slot, json.dumps(ingredients, ensure_ascii=False), note),
+        )
+        changed += 1
+    # delete Neon rows inside Aina's planning window that Aina no longer has
+    cur.execute(
+        "SELECT date::text, slot FROM meal_plans WHERE date BETWEEN %s AND %s",
+        (dmin, dmax),
+    )
+    removed = 0
+    for date, slot in cur.fetchall():
+        if (date, slot) not in meals:
+            removed += 1
+            if not dry:
+                cur.execute(
+                    "DELETE FROM meal_plans WHERE date = %s AND slot = %s",
+                    (date, slot),
+                )
+    log(f"meals: upserted {changed}, removed {removed} within {dmin}..{dmax}")
+    return changed + removed
+
+
 # ---------------------------------------------------------------- main
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--all", action="store_true", help="sync fridge + growth")
+    ap.add_argument("--all", action="store_true", help="sync fridge + growth + meals")
     ap.add_argument("--fridge", action="store_true")
     ap.add_argument("--growth", action="store_true")
+    ap.add_argument("--meals", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--force", action="store_true",
                     help="ignore change-detection and sync anyway")
     args = ap.parse_args()
 
-    do_fridge = args.all or args.fridge or not (args.fridge or args.growth)
-    do_growth = args.all or args.growth or not (args.fridge or args.growth)
+    explicit = args.fridge or args.growth or args.meals
+    do_fridge = args.all or args.fridge or not explicit
+    do_growth = args.all or args.growth or not explicit
+    do_meals = args.all or args.meals or not explicit
     dry = args.dry_run
 
     # cheap no-op when nothing changed (keeps the global Stop hook inexpensive)
@@ -296,6 +376,8 @@ def main():
                         total += sync_fridge(cur, items, dry)
                 if do_growth:
                     total += sync_growth(cur, read_growth_rows(AINA_DB), dry)
+                if do_meals:
+                    total += sync_meal(cur, read_meal_rows(AINA_DB), dry)
     except Exception as e:  # noqa: BLE001
         log(f"ERROR during sync (rolled back): {e}")
         conn.close()

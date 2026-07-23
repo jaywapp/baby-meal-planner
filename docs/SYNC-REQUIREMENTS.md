@@ -1,14 +1,18 @@
 # Aina → BabyMeal(Neon) 데이터 동기화 요청서
 
-작성일: 2026-07-24 | 상태: **1차 구현 완료 (냉장고·성장) / 식단 동기화는 D1(a) 대기**
+작성일: 2026-07-24 | 상태: **구현 완료 (냉장고·성장·식단 전부 자동 동기화)**
 
 ## 구현 현황 (2026-07-24)
 - ✅ **냉장고 재고**: `hyerim-rules.md` 큐브 표 → Neon `fridge_stock` 전량 동기화 (13행 검증)
 - ✅ **성장 기록**: `child_records`(몸무게·키) → Neon `growth_records`(+`baby.weight` 최신값) upsert
+- ✅ **식단** (D1(a) 완료): Aina `meal_plans.ingredients_json`(구조화 저장) → Neon `meal_plans` **범위 스코프 full-state** 동기화. Aina가 계획한 날짜 범위(min..max) 안에서만 추가/수정/삭제를 반영해, 그 범위 밖의 웹 전용 식단은 건드리지 않음.
+  - 선행 작업: `scripts/migrate_meals_to_aina.py`(1회)로 Neon 현재 식단을 Aina에 구조화 백필 → Aina를 식단 SSOT로 승격(무손실). 실행 완료.
+  - `mealplan`/`cube-ops` 스킬이 식단 저장 시 `ingredients_json`을 함께 쓰도록 갱신 완료 → 이후 편집도 무손실 반영.
+  - E2E 검증: Aina에서 재료 추가 → hook 실행 → 웹 반영 확인 → 원복까지 확인.
 - ✅ **자동 트리거**: Aina Stop hook(`D:\aina\.claude\settings.json`) → 세션 종료 시 `scripts/sync_to_neon.py --all` 실행. 소스(aina.db·hyerim-rules.md) 미변경 시 Neon 접속 없이 no-op.
 - ✅ 멱등·실패 무해(exit 0)·로그(`D:\aina\data\logs\neon-sync.log`) 검증 완료
-- ⏳ **식단 동기화 보류**: SQLite `meal_plans`가 낡은 1행뿐이라 지금 full-state 동기화하면 Neon의 정상 시드 식단을 삭제함. **D1(a)로 Aina 식단을 구조화 저장**한 뒤 활성화 예정. 이때까지 `sync_to_neon.py`는 식단을 건드리지 않음.
 - 드라이버: `psycopg2-binary` 설치됨. 연결은 `.env.local`의 `DATABASE_URL_UNPOOLED` 사용.
+- ⚠️ 방향은 여전히 **단방향(Aina→Neon)**. 웹에서 편집한 식단은 Aina 계획 범위 안이면 다음 동기화 때 Aina 기준으로 덮어써짐. 웹→Aina 역방향은 별도 과제.
 
 ---
 
