@@ -29,23 +29,25 @@ function weekStart(d: Date): Date {
 
 export default function CalendarPage() {
   const [view, setView] = useState<View>('week');
-  const [anchor, setAnchor] = useState<Date>(new Date());
+  const [anchor, setAnchor] = useState<Date | null>(null);
   const [meals, setMeals] = useState<MealMap>({});
   const [tested, setTested] = useState<TestedIngredient[]>([]);
   const [editing, setEditing] = useState<{ date: string; slot: 'morning' | 'evening' } | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const todayYmd = ymd(new Date());
-  const selectedYmd = ymd(anchor);
+  const todayYmd = anchor ? ymd(new Date()) : '';
+  const selectedYmd = anchor ? ymd(anchor) : '';
 
   // Range to load: whole month of anchor plus a week padding on both sides.
   const range = useMemo(() => {
+    if (!anchor) return null;
     const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
     const last = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
     return { start: ymd(addDays(first, -7)), end: ymd(addDays(last, 7)) };
   }, [anchor]);
 
   const reload = useCallback(() => {
+    if (!range) return;
     setLoading(true);
     api<MealPlan[]>(`/api/meals?start=${range.start}&end=${range.end}`)
       .then(rows => {
@@ -57,15 +59,31 @@ export default function CalendarPage() {
         setMeals(map);
       })
       .finally(() => setLoading(false));
-  }, [range.start, range.end]);
+  }, [range]);
 
+  useEffect(() => { setAnchor(new Date()); }, []);
   useEffect(() => { reload(); }, [reload]);
   useEffect(() => { api<TestedIngredient[]>('/api/ingredients').then(setTested).catch(() => {}); }, []);
 
+  if (!anchor) {
+    return (
+      <div>
+        <div className="page-header">
+          <h2>식단 캘린더 📅</h2>
+          <p>3일 사이클 기준 이유식 식단</p>
+        </div>
+        <div className="loading">캘린더 불러오는 중...</div>
+      </div>
+    );
+  }
+
   const move = (n: number) => {
-    if (view === 'week') setAnchor(a => addDays(a, n * 7));
-    else if (view === 'day') setAnchor(a => addDays(a, n));
-    else setAnchor(a => new Date(a.getFullYear(), a.getMonth() + n, 1));
+    if (view === 'week') setAnchor(a => addDays(a ?? new Date(), n * 7));
+    else if (view === 'day') setAnchor(a => addDays(a ?? new Date(), n));
+    else setAnchor(a => {
+      const date = a ?? new Date();
+      return new Date(date.getFullYear(), date.getMonth() + n, 1);
+    });
   };
 
   const navTitle = view === 'month'
