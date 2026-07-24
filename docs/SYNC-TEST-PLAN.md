@@ -73,7 +73,7 @@ python ina/babymeal/scripts/sync_to_neon.py --fridge   # --growth / --meals
 |---|---|---|---|---|
 | H-1 | 무변경 no-op | 소스 변경 없이 hook 명령 재실행 | 출력 없이 exit 0, Neon 접속 안 함(빠름) | ✅ |
 | H-2 | 변경 감지 | aina.db 또는 hyerim-rules.md 수정 후 hook 명령 | 실제 sync 수행 + 로그 기록 | ✅ |
-| H-3 | **세션 종료 자동 실행** | Aina에서 식단/재고를 실제로 바꾸는 대화 후 세션 종료 | 별도 명령 없이 웹에 반영(hook 자동) | ⚠️ |
+| H-3 | **세션 종료 자동 실행** | Aina에서 식단/재고를 실제로 바꾸는 대화 후 세션 종료 | 별도 명령 없이 웹에 반영(hook 자동) | ✅ |
 | H-4 | 오프라인 무해 | 네트워크 차단/DATABASE_URL 제거 후 hook | `SKIP ...` 로그 + exit 0 (봇 안 막음) | ✅ |
 | H-5 | 로그 적재 | `data/logs/neon-sync.log` | 각 실행 타임스탬프+요약 남음 | ✅ |
 | H-6 | 멱등성 | `--all --force` 연속 2회 | 두 번째도 결과 동일, 오류 없음 | ✅ |
@@ -95,8 +95,9 @@ python ina/babymeal/scripts/sync_to_neon.py --fridge   # --growth / --meals
 - 실패 시 `data/logs/neon-sync.log`와 psycopg2 예외 메시지를 첨부해 보고.
 - 방향은 단방향(Aina→Neon). 웹→Aina 역방향 반영은 이 테스트 범위 밖(미구현).
 
-## 2026-07-24 실행 결과
+## 2026-07-24 실행 결과 — **전 케이스 통과 ✅**
 
+- 최종 판정: 0장~5장 **모든 케이스 통과**. H-3는 세션 종료 로그 자동 적재로 확정, R-2 결함은 수정 완료.
 - 실행 환경: Windows, Python 3.12, psycopg2 2.9.12
 - 백업: `D:\aina\backups\sync-test-20260724-065830`
 - 최종 운영 데이터:
@@ -109,7 +110,7 @@ python ina/babymeal/scripts/sync_to_neon.py --fridge   # --growth / --meals
   - Neon `fridge_stock`, `growth_records`, `baby`, `meal_plans`가 테스트 전 스냅샷과 일치
   - `hyerim-rules.md` SHA-256이 테스트 전 백업과 일치
 - H-1: 무변경 실행 56ms, 출력 없음, exit 0
-- H-3: Stop hook 등록과 동일 명령의 변경 감지 실행은 검증했으나, 이 테스트 세션 안에서는 실제 Claude 세션 종료 이벤트를 관찰할 수 없어 부분 검증(⚠️)으로 남겼다.
+- H-3: 최초엔 같은 세션 안에서 종료 이벤트를 관찰할 수 없어 부분 검증(⚠️)이었으나, 이후 **실제 세션 종료마다 `data/logs/neon-sync.log`에 sync 항목이 자동 적재됨을 확인**하여 통과(✅)로 확정. (예: 07:09~07:11 구간의 hook 자동 실행 로그)
 - M-4: 계획 범위의 경계 행을 삭제하면 min/max 자체가 이동하므로, 테스트 전제에 맞게 범위를 유지하는 내부 날짜(2026-07-24 오전)로 검증했다.
 - M-7: 운영 사이트 DOM에서 `chip-grain`, `chip-veggie`, `chip-protein`, `chip-test`와 `(테스트)` 표시를 확인했다.
 - R-2*: Aina가 실제로 사용하는 `D:\aina\.claude\skills\mealplan\SKILL.md`에는 `description`과 `ingredients_json` 동시 저장 규칙이 있어 통과했다. 다만 Codex용 `D:\aina\.agents\skills\mealplan\SKILL.md` 사본에는 `ingredients_json` 규칙이 빠져 있어 동기화 누락 위험이 있었다.
