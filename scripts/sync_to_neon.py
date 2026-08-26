@@ -113,8 +113,27 @@ def save_state(state):
 
 
 # ---------------------------------------------------------------- parsers
+DEFAULT_CUBE_SIZE = 20  # matches the web app's POST default (app/api/fridge/route.ts)
+
+
+def _is_stock_heading(line):
+    """The stock table heading, e.g. '### 🧊 현재 냉동 큐브 재고 (…)'.
+
+    Matched loosely because the wording has already drifted once (냉장고 -> 냉동),
+    but '🔔 큐브 재고 알림 규칙' must not match -- that is a different table.
+    """
+    return "큐브 재고" in line and "알림" not in line
+
+
 def parse_fridge_markdown(path):
-    """Extract cube inventory rows from the '현재 냉장고 큐브 재고' table."""
+    """Extract cube inventory rows from the cube-stock table.
+
+    Two table shapes are accepted:
+      4+ columns -- 재료 | 용량 | 수량 | 제조일   (original)
+      2-3 columns -- 재료 | 수량                  (current)
+    With the short shape the size is not recorded per row, so a trailing size in
+    the name is used when present ('쌀미음 30g') and DEFAULT_CUBE_SIZE otherwise.
+    """
     if not os.path.exists(path):
         log(f"WARN hyerim-rules.md not found: {path}")
         return None
@@ -123,26 +142,39 @@ def parse_fridge_markdown(path):
 
     items, in_table = [], False
     for line in lines:
-        if "냉장고 큐브 재고" in line:
+        if _is_stock_heading(line):
             in_table = True
             continue
         if in_table:
             s = line.strip()
             if s.startswith("|"):
                 cells = [c.strip() for c in s.strip("|").split("|")]
-                if len(cells) < 4:
+                if len(cells) < 2:
                     continue
-                ingredient, size_raw, count_raw, made_raw = cells[:4]
+                ingredient = cells[0]
                 if ingredient in ("재료", "") or set(ingredient) <= {"-", ":"}:
                     continue  # header / separator row
-                size_m = re.search(r"(\d+)", size_raw)
+                if len(cells) >= 4:
+                    size_raw, count_raw, made_raw = cells[1], cells[2], cells[3]
+                    size_m = re.search(r"(\d+)", size_raw)
+                    if not size_m:
+                        continue
+                    size = int(size_m.group(1))
+                    made = made_raw if re.match(r"\d{4}-\d{2}-\d{2}", made_raw) else None
+                else:
+                    count_raw, made = cells[1], None
+                    name_size = re.search(r"\s(\d+)\s*g$", ingredient)
+                    if name_size:
+                        size = int(name_size.group(1))
+                        ingredient = ingredient[: name_size.start()].strip()
+                    else:
+                        size = DEFAULT_CUBE_SIZE
                 count_m = re.search(r"(\d+)", count_raw)
-                if not size_m or not count_m:
+                if not count_m:
                     continue
-                made = made_raw if re.match(r"\d{4}-\d{2}-\d{2}", made_raw) else None
                 items.append({
                     "ingredient": ingredient,
-                    "size": int(size_m.group(1)),
+                    "size": size,
                     "count": int(count_m.group(1)),
                     "made_date": made,
                 })
@@ -179,6 +211,19 @@ def read_growth_rows(db_path):
 # ---------------------------------------------------------------- sync ops
 def sync_fridge(cur, items, dry):
     """Reconcile Neon fridge_stock to exactly match the markdown table."""
+    cur.execute("SELECT ingredient, size FROM fridge_stock")
+    existing = cur.fetchall()
+    # This is a full-state sync, so an empty snapshot means "delete everything".
+    # An empty parse is far more likely a format change in hyerim-rules.md than
+    # a genuinely empty freezer -- that is exactly how 6 rows were silently
+    # wiped on 2026-08-19 -- so refuse to act on it and leave Neon alone.
+    if not items and existing:
+        log(
+            f"WARN fridge: parsed 0 source rows but Neon has {len(existing)} -- "
+            "skipping, check the cube table format in hyerim-rules.md"
+        )
+        return 0
+
     changed = 0
     keep = set()
     for it in items:
@@ -196,9 +241,8 @@ def sync_fridge(cur, items, dry):
         )
         changed += 1
     # delete Neon rows not present in the source snapshot
-    cur.execute("SELECT ingredient, size FROM fridge_stock")
     removed = 0
-    for ingredient, size in cur.fetchall():
+    for ingredient, size in existing:
         if (ingredient, size) not in keep:
             removed += 1
             if not dry:
