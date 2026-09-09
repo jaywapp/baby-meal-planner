@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { api, ymd } from '@/components/ui';
+import { reportApiError, api, ymd } from '@/components/ui';
 import type { AllergyTest, TestedIngredient } from '@/lib/types';
 
 const GRAMS = [3, 10, 20];
@@ -15,7 +15,7 @@ export default function AllergyPage() {
     Promise.all([
       api<AllergyTest[]>('/api/allergy'),
       api<TestedIngredient[]>('/api/ingredients'),
-    ]).then(([a, t]) => { setTests(a); setTested(t); }).finally(() => setLoading(false));
+    ]).then(([a, t]) => { setTests(a); setTested(t); }).catch(reportApiError).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => { reload(); }, [reload]);
@@ -75,7 +75,7 @@ export default function AllergyPage() {
                     {t.start_date && end && ` · ${t.start_date.slice(5).replace('-', '/')}~${end.getMonth() + 1}/${end.getDate()}`}
                   </div>
                 </div>
-                <button className="test-complete-btn" onClick={() => complete(t)}>완료</button>
+                <button className="test-complete-btn" onClick={() => { void complete(t).catch(reportApiError); }}>완료</button>
               </div>
             );
           })}
@@ -94,11 +94,11 @@ export default function AllergyPage() {
                 </div>
                 <div className="test-queue-status">{t.high_risk ? '⚠️ 평일만 · ' : ''}일정 미정</div>
               </div>
-              <button className="test-complete-btn" onClick={() => start(t)}>시작</button>
+              <button className="test-complete-btn" onClick={() => { void start(t).catch(reportApiError); }}>시작</button>
             </div>
           ))}
         </div>
-        <button className="add-btn" style={{ marginTop: 12 }} onClick={addTest}>＋ 테스트 추가</button>
+        <button className="add-btn" style={{ marginTop: 12 }} onClick={() => { void addTest().catch(reportApiError); }}>＋ 테스트 추가</button>
       </div>
 
       <div>

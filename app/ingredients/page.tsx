@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api } from '@/components/ui';
+import { reportApiError, api } from '@/components/ui';
 import type { TestedIngredient } from '@/lib/types';
 
 export default function IngredientsPage() {
@@ -9,7 +9,7 @@ export default function IngredientsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api<TestedIngredient[]>('/api/ingredients').then(setItems).finally(() => setLoading(false));
+    api<TestedIngredient[]>('/api/ingredients').then(setItems).catch(reportApiError).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="loading">불러오는 중...</div>;

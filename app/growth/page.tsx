@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { api, ymd } from '@/components/ui';
+import { reportApiError, api, ymd } from '@/components/ui';
 import type { GrowthRecord } from '@/lib/types';
 
 export default function GrowthPage() {
@@ -11,7 +11,7 @@ export default function GrowthPage() {
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(() => {
-    api<GrowthRecord[]>('/api/growth').then(setRecords).finally(() => setLoading(false));
+    api<GrowthRecord[]>('/api/growth').then(setRecords).catch(reportApiError).finally(() => setLoading(false));
   }, []);
   useEffect(() => { reload(); }, [reload]);
 
@@ -71,7 +71,7 @@ export default function GrowthPage() {
               <input className="form-input" type="number" step="0.1" value={form.height} placeholder="예: 68.0"
                 onChange={e => setForm(f => ({ ...f, height: e.target.value }))} />
             </div>
-            <button className="btn-primary" onClick={save}>저장</button>
+            <button className="btn-primary" onClick={() => { void save().catch(reportApiError); }}>저장</button>
           </div>
         </div>
       )}

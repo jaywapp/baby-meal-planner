@@ -20,6 +20,11 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+export function reportApiError() {
+  console.error('[api] Client request failed');
+  alert('요청에 실패했습니다. 입력값과 연결 상태를 확인한 뒤 다시 시도해 주세요.');
+}
+
 export function ymd(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');

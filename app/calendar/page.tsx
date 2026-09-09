@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, Chip, ymd, DAY_NAMES } from '@/components/ui';
+import { reportApiError, api, Chip, ymd, DAY_NAMES } from '@/components/ui';
 import type { MealPlan, MealIngredient, TestedIngredient, ChipType } from '@/lib/types';
 
 type View = 'week' | 'day' | 'month';
@@ -37,14 +37,16 @@ export default function CalendarPage() {
 
   const todayYmd = anchor ? ymd(new Date()) : '';
   const selectedYmd = anchor ? ymd(anchor) : '';
+  const anchorYear = anchor?.getFullYear();
+  const anchorMonth = anchor?.getMonth();
 
   // Range to load: whole month of anchor plus a week padding on both sides.
   const range = useMemo(() => {
-    if (!anchor) return null;
-    const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-    const last = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+    if (anchorYear === undefined || anchorMonth === undefined) return null;
+    const first = new Date(anchorYear, anchorMonth, 1);
+    const last = new Date(anchorYear, anchorMonth + 1, 0);
     return { start: ymd(addDays(first, -7)), end: ymd(addDays(last, 7)) };
-  }, [anchor]);
+  }, [anchorYear, anchorMonth]);
 
   const reload = useCallback(() => {
     if (!range) return;
@@ -58,12 +60,12 @@ export default function CalendarPage() {
         }
         setMeals(map);
       })
-      .finally(() => setLoading(false));
+      .catch(reportApiError).finally(() => setLoading(false));
   }, [range]);
 
   useEffect(() => { setAnchor(new Date()); }, []);
   useEffect(() => { reload(); }, [reload]);
-  useEffect(() => { api<TestedIngredient[]>('/api/ingredients').then(setTested).catch(() => {}); }, []);
+  useEffect(() => { api<TestedIngredient[]>('/api/ingredients').then(setTested).catch(reportApiError); }, []);
 
   if (!anchor) {
     return (
@@ -325,7 +327,7 @@ function SlotEditor({ date, slot, initial, tested, onClose, onSaved }: {
           <input className="form-input" value={note} onChange={e => setNote(e.target.value)} placeholder="예: 사이클 1 · 참깨 테스트" />
         </div>
 
-        <button className="btn-primary" onClick={save} disabled={saving}>
+        <button className="btn-primary" onClick={() => { void save().catch(reportApiError); }} disabled={saving}>
           {saving ? '저장 중...' : '저장'}
         </button>
       </div>

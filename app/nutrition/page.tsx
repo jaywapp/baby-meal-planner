@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, ymd } from '@/components/ui';
+import { reportApiError, api, ymd } from '@/components/ui';
 import type { MealPlan } from '@/lib/types';
+import { countNutrition } from '@/lib/nutrition';
 
 export default function NutritionPage() {
   const [meals, setMeals] = useState<MealPlan[]>([]);
@@ -13,18 +14,12 @@ export default function NutritionPage() {
     const start = new Date(end.getTime() - 6 * 86400000);
     api<MealPlan[]>(`/api/meals?start=${ymd(start)}&end=${ymd(end)}`)
       .then(setMeals)
-      .finally(() => setLoading(false));
+      .catch(reportApiError).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="loading">불러오는 중...</div>;
 
-  const all = meals.flatMap(m => m.ingredients);
-  const counts = {
-    grain: all.filter(i => i.type === 'grain').length,
-    protein: all.filter(i => i.type === 'protein').length,
-    veggie: new Set(all.filter(i => i.type === 'veggie').map(i => i.name)).size,
-    slots: meals.length,
-  };
+  const counts = countNutrition(meals);
   const pct = (v: number, target: number) => Math.min(100, Math.round((v / target) * 100));
   const bars = [
     { label: '탄수화물 (곡류 포함 끼니)', pct: pct(counts.grain, counts.slots || 1), color: 'var(--accent-mint)' },

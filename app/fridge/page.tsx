@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { api, ymd } from '@/components/ui';
+import { reportApiError, api, ymd } from '@/components/ui';
 import type { FridgeItem } from '@/lib/types';
 
 const EMOJIS: Record<string, string> = {
@@ -17,7 +17,7 @@ export default function FridgePage() {
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(() => {
-    api<FridgeItem[]>('/api/fridge').then(setItems).finally(() => setLoading(false));
+    api<FridgeItem[]>('/api/fridge').then(setItems).catch(reportApiError).finally(() => setLoading(false));
   }, []);
   useEffect(() => { reload(); }, [reload]);
 
@@ -59,7 +59,7 @@ export default function FridgePage() {
           <div
             key={f.id}
             className={`fridge-card-item ${f.count === 0 ? 'out-of-stock' : f.count <= 2 ? 'low-stock' : ''}`}
-            onClick={() => edit(f)}
+            onClick={() => { void edit(f).catch(reportApiError); }}
           >
             <div className="fi-emoji">{EMOJIS[f.ingredient] ?? '🧊'}</div>
             <div className="fi-name">{f.ingredient}</div>
@@ -97,7 +97,7 @@ export default function FridgePage() {
               <input className="form-input" type="date" value={form.made_date}
                 onChange={e => setForm(f => ({ ...f, made_date: e.target.value }))} />
             </div>
-            <button className="btn-primary" onClick={save}>저장</button>
+            <button className="btn-primary" onClick={() => { void save().catch(reportApiError); }}>저장</button>
           </div>
         </div>
       )}
