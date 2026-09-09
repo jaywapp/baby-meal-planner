@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api } from '@/components/ui';
+import { reportApiError, api } from '@/components/ui';
 import type { Baby } from '@/lib/types';
 
 const STAGES = ['초기1', '초기2', '중기', '후기', '완료기'];
@@ -11,7 +11,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api<Baby>('/api/baby').then(setBaby);
+    api<Baby>('/api/baby').then(setBaby).catch(reportApiError);
   }, []);
 
   if (!baby) return <div className="loading">불러오는 중...</div>;
@@ -55,7 +55,7 @@ export default function SettingsPage() {
             <input className="settings-input" type="number" step="0.1" value={baby.weight}
               onChange={e => setBaby({ ...baby, weight: parseFloat(e.target.value) || 0 })} />
           </div>
-          <button className="btn-primary" onClick={save} disabled={saving}>{saving ? '저장 중...' : '저장'}</button>
+          <button className="btn-primary" onClick={() => { void save().catch(reportApiError); }} disabled={saving}>{saving ? '저장 중...' : '저장'}</button>
         </div>
       </div>
     </div>

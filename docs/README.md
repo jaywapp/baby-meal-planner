@@ -14,3 +14,6 @@
 - 시크릿·토큰·키·`.env` 값은 문서·로그·커밋에 기록하지 않습니다.
 
 이 저장소의 기존 문서 인덱스와 생성 규칙이 있으면 그 규칙을 우선하며, 기존 파일을 덮어쓰지 않습니다.
+
+- 2026-09-09 성능·안정성: [분석](runtime-resilience-20260909-analysis.md), [설계](runtime-resilience-20260909-design.md), [작업](runtime-resilience-20260909-tasks.md)
+- 2026-09-09 브라우저 통합 검증: [분석](integration-verification-analysis.md), [설계](integration-verification-design.md), [결과](integration-verification-tasks.md)

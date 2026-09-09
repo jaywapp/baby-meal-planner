@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { api, ymd } from '@/components/ui';
+import { reportApiError, api, ymd } from '@/components/ui';
 import type { MealPlan, FridgeItem } from '@/lib/types';
 
 export default function ShoppingPage() {
@@ -32,7 +32,7 @@ export default function ShoppingPage() {
       }));
       list.sort((a, b) => Number(a.inStock) - Number(b.inStock));
       setNeeded(list);
-    }).finally(() => setLoading(false));
+    }).catch(reportApiError).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="loading">불러오는 중...</div>;
