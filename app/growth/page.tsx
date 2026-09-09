@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { reportApiError, api, ymd } from '@/components/ui';
 import type { GrowthRecord } from '@/lib/types';
 
@@ -9,6 +9,8 @@ export default function GrowthPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ date: ymd(new Date()), weight: '', height: '' });
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const saveInFlight = useRef(false);
 
   const reload = useCallback(() => {
     api<GrowthRecord[]>('/api/growth').then(setRecords).catch(reportApiError).finally(() => setLoading(false));
@@ -16,18 +18,26 @@ export default function GrowthPage() {
   useEffect(() => { reload(); }, [reload]);
 
   const save = async () => {
+    if (saveInFlight.current) return;
     if (!form.date || !form.weight) return alert('날짜와 몸무게를 입력해주세요');
-    await api('/api/growth', {
-      method: 'POST',
-      body: JSON.stringify({
-        date: form.date,
-        weight: parseFloat(form.weight),
-        height: form.height ? parseFloat(form.height) : null,
-      }),
-    });
-    setShowAdd(false);
-    setForm({ date: ymd(new Date()), weight: '', height: '' });
-    reload();
+    saveInFlight.current = true;
+    setSaving(true);
+    try {
+      await api('/api/growth', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: form.date,
+          weight: parseFloat(form.weight),
+          height: form.height ? parseFloat(form.height) : null,
+        }),
+      });
+      setShowAdd(false);
+      setForm({ date: ymd(new Date()), weight: '', height: '' });
+      reload();
+    } finally {
+      saveInFlight.current = false;
+      setSaving(false);
+    }
   };
 
   if (loading) return <div className="loading">불러오는 중...</div>;
@@ -71,7 +81,7 @@ export default function GrowthPage() {
               <input className="form-input" type="number" step="0.1" value={form.height} placeholder="예: 68.0"
                 onChange={e => setForm(f => ({ ...f, height: e.target.value }))} />
             </div>
-            <button className="btn-primary" onClick={() => { void save().catch(reportApiError); }}>저장</button>
+            <button className="btn-primary" disabled={saving} onClick={() => { void save().catch(reportApiError); }}>{saving ? '저장 중...' : '저장'}</button>
           </div>
         </div>
       )}
